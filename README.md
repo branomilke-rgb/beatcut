@@ -17,16 +17,22 @@ clips ─► moments.ts (loudest spots of each clip's audio, unless you mark the
 - Node.js ≥ 22.18 (runs the TypeScript directly, no build step)
 - `ffmpeg` and `ffprobe` on `PATH`
 
-## App
+## App (Electron)
 
 ```bash
-npm start   # http://localhost:3200
+npm install
+npm run app
 ```
 
-One page (`public/index.html`): clips, song, format (9:16 / 16:9 / 1:1), length
-(15 / 30 / 60 s), game and music volume → progress → player and download.
-The server (`src/server.ts`) listens on 127.0.0.1 only and keeps every file in
-`out/jobs/<id>/`.
+One window (`public/index.html`): clips, song, format (9:16 / 16:9 / 1:1), length
+(15 / 30 / 60 s), game and music volume → progress → player and **Save video…**.
+
+- Clips and the song are read straight from disk by path (`electron/main.ts`); nothing
+  is copied or uploaded. The edit renders into the temp folder until you save it.
+- The page talks to the app only through `electron/preload.cjs`; every request is
+  checked in `electron/request.ts` before ffmpeg runs.
+- `BEATCUT_SELFTEST=<dir> npx electron .` drives the real window with `clip*.mp4` and
+  `song.wav` from `<dir>` and writes screenshots and `selftest.json` there.
 
 ## CLI
 
@@ -61,7 +67,7 @@ under `skipped` in the plan instead of being clamped off the beat.
 npm install
 npm test          # node:test, no media needed
 npm run typecheck
-npm run smoke     # end-to-end render on generated test-pattern video and a click track
+npm run smoke     # end-to-end CLI render on generated test-pattern video and a click track
 ```
 
 ## Scope and data

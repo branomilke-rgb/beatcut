@@ -3,6 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; media-src file:">
+
 <title>beatcut</title>
 <style>
   :root {
@@ -25,7 +27,7 @@
   ul.files .size { color: var(--muted); font-size: 13px; flex: none; }
   button.x { background: none; border: 0; color: var(--muted); font-size: 18px; cursor: pointer; padding: 0 4px; }
   button.x:hover { color: var(--text); }
-  .pick { display: inline-block; padding: 8px 14px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+  .pick { display: inline-block; padding: 8px 14px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; background: none; color: inherit; font: inherit; }
   .pick:hover { border-color: var(--muted); }
   .song-name { margin-left: 12px; color: var(--muted); }
   .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
@@ -66,13 +68,12 @@
       <div class="drop" id="drop" tabindex="0" role="button">
         <strong>Drop video clips here</strong> or click to choose · up to 6
       </div>
-      <input type="file" id="clip-input" accept="video/*" multiple hidden>
       <ul class="files" id="clip-list"></ul>
     </section>
 
     <section>
       <h2>2 · Song</h2>
-      <label class="pick">Choose song<input type="file" id="song-input" accept="audio/*" hidden></label>
+      <button class="pick" id="song-pick">Choose song</button>
       <span class="song-name" id="song-name">No song yet</span>
     </section>
 
@@ -119,7 +120,7 @@
     <video id="player" controls playsinline></video>
     <p class="meta" id="meta"></p>
     <div class="actions">
-      <a id="download" download>Download</a>
+      <a id="download" href="#">Save video…</a>
       <button id="again">Make another</button>
     </div>
   </section>
@@ -150,28 +151,30 @@ function refresh() {
   $('hint').textContent = ready ? '' : (!clips.length && !song ? 'Add at least one clip and a song.' : !clips.length ? 'Add at least one clip.' : 'Choose a song.');
 }
 
+const VIDEO = /\.(mp4|mov|mkv|webm|avi)$/i;
+
 function addClips(files) {
-  const videos = [...files].filter(f => f.type.startsWith('video/') || /\.(mp4|mov|mkv|webm|avi)$/i.test(f.name));
-  clips = clips.concat(videos).slice(0, MAX_CLIPS);
+  const known = new Set(clips.map(c => c.path));
+  clips = clips.concat(files.filter(f => VIDEO.test(f.name) && !known.has(f.path))).slice(0, MAX_CLIPS);
   refresh();
 }
 
 const drop = $('drop');
-drop.onclick = () => $('clip-input').click();
-drop.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('clip-input').click(); } };
+const pickClips = async () => addClips(await window.beatcut.pick('clips'));
+drop.onclick = pickClips;
+drop.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pickClips(); } };
 drop.ondragover = e => { e.preventDefault(); drop.classList.add('over'); };
 drop.ondragleave = () => drop.classList.remove('over');
-drop.ondrop = e => { e.preventDefault(); drop.classList.remove('over'); addClips(e.dataTransfer.files); };
-$('clip-input').onchange = e => { addClips(e.target.files); e.target.value = ''; };
-$('song-input').onchange = e => { song = e.target.files[0] ?? song; refresh(); };
+drop.ondrop = async e => {
+  e.preventDefault();
+  drop.classList.remove('over');
+  addClips(await window.beatcut.describe([...e.dataTransfer.files].map(f => window.beatcut.pathFor(f))));
+};
+// A file dropped anywhere else must not replace the page.
+document.addEventListener('dragover', e => e.preventDefault());
+document.addEventListener('drop', e => e.preventDefault());
+$('song-pick').onclick = async () => { song = (await window.beatcut.pick('song'))[0] ?? song; refresh(); };
 for (const id of ['game', 'music']) $(id).oninput = e => { e.target.nextElementSibling.value = e.target.value; };
-
-async function api(path, options) {
-  const res = await fetch(path, options);
-  const body = await res.json();
-  if (!res.ok) throw new Error(body.error || res.statusText);
-  return body;
-}
 
 function show(which) {
   $('form').hidden = which !== 'form';
@@ -187,59 +190,44 @@ function progress(text, pct) {
 
 function fail(message) {
   show('status');
-  $('status-text').textContent = 'Something went wrong: ' + message;
+  $('status-text').textContent = 'Something went wrong: ' + message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
   $('status-text').classList.add('error');
   $('bar').style.width = '0';
   setTimeout(() => show('form'), 4000);
 }
 
+window.beatcut.onStage(stage => { const [text, pct] = STAGES[stage] ?? ['Working', 40]; progress(text, pct); });
+
 $('go').onclick = async () => {
   if ($('go').getAttribute('aria-disabled') === 'true') { $('hint').animate([{ opacity: 0.3 }, { opacity: 1 }], 300); return; }
   show('status');
+  progress('Starting', 5);
   try {
-    const job = await api('/api/jobs', { method: 'POST' });
-    for (const [i, file] of clips.entries()) {
-      progress(`Reading clip ${i + 1} of ${clips.length}`, 5 + (30 * i) / clips.length);
-      await api(`/api/jobs/${job.id}/clip?name=${encodeURIComponent(file.name)}`, { method: 'POST', body: file });
-    }
-    progress('Reading the song', 35);
-    await api(`/api/jobs/${job.id}/song?name=${encodeURIComponent(song.name)}`, { method: 'POST', body: song });
-    await api(`/api/jobs/${job.id}/start`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        format: document.querySelector('[name=format]:checked').value,
-        lengthSec: Number(document.querySelector('[name=length]:checked').value),
-        gameVolume: Number($('game').value),
-        musicVolume: Number($('music').value),
-      }),
-    });
-    await poll(job.id);
+    done(await window.beatcut.make({
+      clips: clips.map(c => c.path),
+      song: song.path,
+      format: document.querySelector('[name=format]:checked').value,
+      lengthSec: Number(document.querySelector('[name=length]:checked').value),
+      gameVolume: Number($('game').value),
+      musicVolume: Number($('music').value),
+    }));
   } catch (error) {
     fail(error.message);
   }
 };
 
-async function poll(id) {
-  for (;;) {
-    const job = await api(`/api/jobs/${id}`);
-    if (job.state === 'done') return done(job);
-    if (job.state === 'failed') throw new Error(job.error);
-    const [text, pct] = STAGES[job.stage] ?? ['Starting', 40];
-    progress(text, pct);
-    await new Promise(r => setTimeout(r, 800));
-  }
-}
-
-function done(job) {
+function done(r) {
   progress('Done', 100);
-  const src = `/api/jobs/${job.id}/video`;
-  $('player').src = src;
-  $('download').href = src + '?download';
-  const r = job.result;
+  $('player').src = r.videoUrl;
   $('meta').textContent = `${(r.durationMs / 1000).toFixed(1)} s · ${r.shots} shots from ${r.clipsUsed} clip${r.clipsUsed === 1 ? '' : 's'} · ${Math.round(r.bpm)} BPM`;
   show('result');
 }
+
+$('download').onclick = async e => {
+  e.preventDefault();
+  const saved = await window.beatcut.save();
+  if (saved) $('meta').textContent = 'Saved to ' + saved;
+};
 
 $('again').onclick = () => { $('player').removeAttribute('src'); clips = []; song = null; refresh(); show('form'); };
 refresh();

@@ -12,13 +12,16 @@
     "node": ">=22.18"
   },
   "scripts": {
-    "start": "node src/server.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "app": "npm run build && electron .",
     "test": "node --test \"test/*.test.ts\"",
     "typecheck": "tsc",
     "smoke": "node scripts/smoke.ts"
   },
   "devDependencies": {
     "@types/node": "^22.15.0",
+    "electron": "^37.10.3",
     "typescript": "^5.8.3"
-  }
+  },
+  "main": "dist/electron/main.js"
 }
