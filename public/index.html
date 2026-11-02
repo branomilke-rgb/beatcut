@@ -58,7 +58,7 @@
 <body>
 <main>
   <h1>beatcut</h1>
-  <p class="lead">Drop your clips and a song. You get one edit with every highlight on the beat.</p>
+  <p class="lead">Drop your clips and a song. You get one edit with every highlight on the beat. Everything stays on this computer.</p>
 
   <div id="form">
     <section>
@@ -111,7 +111,7 @@
   </div>
 
   <section class="status" id="status" hidden>
-    <div id="status-text">Uploading…</div>
+    <div id="status-text">Starting…</div>
     <div class="bar"><i id="bar"></i></div>
   </section>
 
@@ -199,10 +199,10 @@ $('go').onclick = async () => {
   try {
     const job = await api('/api/jobs', { method: 'POST' });
     for (const [i, file] of clips.entries()) {
-      progress(`Uploading clip ${i + 1} of ${clips.length}`, 5 + (30 * i) / clips.length);
+      progress(`Reading clip ${i + 1} of ${clips.length}`, 5 + (30 * i) / clips.length);
       await api(`/api/jobs/${job.id}/clip?name=${encodeURIComponent(file.name)}`, { method: 'POST', body: file });
     }
-    progress('Uploading the song', 35);
+    progress('Reading the song', 35);
     await api(`/api/jobs/${job.id}/song?name=${encodeURIComponent(song.name)}`, { method: 'POST', body: song });
     await api(`/api/jobs/${job.id}/start`, {
       method: 'POST',
