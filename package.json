@@ -1,0 +1,19 @@
+{
+  "name": "beatcut",
+  "version": "0.1.0",
+  "description": "Minimal beat-synced highlight editor: puts your marked moments on the beat of a song and renders with ffmpeg.",
+  "license": "MIT",
+  "author": "Branislav Milke",
+  "type": "module",
+  "bin": { "beatcut": "src/cli.ts" },
+  "engines": { "node": ">=22.18" },
+  "scripts": {
+    "test": "node --test \"test/*.test.ts\"",
+    "typecheck": "tsc",
+    "smoke": "node scripts/smoke.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "typescript": "^5.8.3"
+  }
+}
