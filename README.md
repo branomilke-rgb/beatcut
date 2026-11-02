@@ -1,15 +1,15 @@
 # beatcut
 
-A minimal beat-synced highlight editor. You give it a song and a few gameplay clips
-with the moments you care about (in seconds). It finds the beat of the song, puts
-every moment exactly on a beat, and renders one video with ffmpeg.
+A minimal beat-synced highlight editor. Open the app, drop up to 6 gameplay clips and
+a song, and get one edit where every highlight lands on a beat.
 
 Deliberately small: hard cuts only, no effects, no slow motion, no transitions.
 
 ```
-song ──► beats.ts (onset envelope → tempo → beat grid)
-clips ─► plan.ts  (each moment on a beat, whole-beat shots, deterministic)
-       ► render.ts (one ffmpeg command: crop to format, concat, game audio under the song)
+song ──► beats.ts   (onset envelope → tempo → beat grid)
+clips ─► moments.ts (loudest spots of each clip's audio, unless you mark them)
+       ► plan.ts    (each moment on a beat, whole-beat shots, round robin over clips)
+       ► render.ts  (one ffmpeg command: crop to format, concat, game audio under the song)
 ```
 
 ## Requirements
@@ -17,7 +17,18 @@ clips ─► plan.ts  (each moment on a beat, whole-beat shots, deterministic)
 - Node.js ≥ 22.18 (runs the TypeScript directly, no build step)
 - `ffmpeg` and `ffprobe` on `PATH`
 
-## Usage
+## App
+
+```bash
+npm start   # http://localhost:3200
+```
+
+One page (`public/index.html`): clips, song, format (9:16 / 16:9 / 1:1), length
+(15 / 30 / 60 s), game and music volume → progress → player and download.
+The server (`src/server.ts`) listens on 127.0.0.1 only and keeps every file in
+`out/jobs/<id>/`.
+
+## CLI
 
 ```json
 {
@@ -40,6 +51,7 @@ node src/cli.ts render project.json edit.mp4  # video + edit.mp4.plan.json
 ```
 
 Formats: `9:16`, `16:9`, `1:1`. Volumes are 0–100. Paths are relative to the project file.
+`moments` is optional; without it the clip's loudest spots are used.
 A moment that does not fit inside its clip, or overlaps a shot already used, is listed
 under `skipped` in the plan instead of being clamped off the beat.
 

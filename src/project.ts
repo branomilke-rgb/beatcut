@@ -8,7 +8,7 @@ export interface Project {
   lengthMs: number;
   gameVolume: number;
   musicVolume: number;
-  clips: { id: string; path: string; momentsMs: number[] }[];
+  clips: { id: string; path: string; momentsMs?: number[] }[];
 }
 
 function fail(message: string): never {
@@ -36,10 +36,13 @@ export function parseProject(input: unknown, projectPath: string): Project {
   const clips = raw.clips.map((c: unknown, i: number) => {
     const clip = c as { path?: unknown; moments?: unknown };
     if (typeof clip?.path !== 'string' || !clip.path) fail(`clips[${i}].path must be a path`);
+    const id = `c${i + 1}`;
+    const path = resolve(base, clip.path);
+    if (clip.moments === undefined) return { id, path };
     if (!Array.isArray(clip.moments) || clip.moments.some(m => typeof m !== 'number' || m < 0)) {
       fail(`clips[${i}].moments must be a list of seconds`);
     }
-    return { id: `c${i + 1}`, path: resolve(base, clip.path), momentsMs: (clip.moments as number[]).map(m => Math.round(m * 1000)) };
+    return { id, path, momentsMs: (clip.moments as number[]).map(m => Math.round(m * 1000)) };
   });
 
   return {

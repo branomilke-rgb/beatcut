@@ -10,7 +10,7 @@ export const PLAN_VERSION = 'beatcut-plan-v1';
 export interface ClipInput {
   id: string;
   durationMs: number;
-  /** Moments inside the clip, in milliseconds from the clip start. */
+  /** Moments inside the clip, in milliseconds from the clip start, best first. */
   momentsMs: number[];
 }
 
@@ -66,29 +66,37 @@ export function planEdit(clips: ClipInput[], beats: BeatGrid, options: PlanOptio
   const used = new Map<string, [number, number][]>();
   let cursor = 0;
 
-  for (const clip of clips) {
-    for (const momentMs of [...clip.momentsMs].sort((a, b) => a - b)) {
-      const start = timeline[cursor];
-      const hit = timeline[cursor + leadBeats];
-      const end = timeline[cursor + shotBeats];
-      if (start === undefined || hit === undefined || end === undefined || end > options.targetMs) break;
-
-      const sourceStartMs = momentMs - (hit - start);
-      const sourceEndMs = sourceStartMs + (end - start);
-      if (sourceStartMs < 0 || sourceEndMs > clip.durationMs) {
-        skipped.push({ clipId: clip.id, momentMs, reason: 'OUT_OF_CLIP' });
-        continue;
-      }
-      const ranges = used.get(clip.id) ?? [];
-      if (ranges.some(([s, e]) => sourceStartMs < e && sourceEndMs > s)) {
-        skipped.push({ clipId: clip.id, momentMs, reason: 'OVERLAP' });
-        continue;
-      }
-      ranges.push([sourceStartMs, sourceEndMs]);
-      used.set(clip.id, ranges);
-      shots.push({ clipId: clip.id, sourceStartMs, sourceEndMs, timelineStartMs: start, durationMs: end - start, hitMs: hit });
-      cursor += shotBeats;
+  // Round robin: every clip's best moment first, then every clip's second best, ...
+  const queue: { clip: ClipInput; momentMs: number }[] = [];
+  const rounds = Math.max(0, ...clips.map(c => c.momentsMs.length));
+  for (let r = 0; r < rounds; r++) {
+    for (const clip of clips) {
+      const momentMs = clip.momentsMs[r];
+      if (momentMs !== undefined) queue.push({ clip, momentMs });
     }
+  }
+
+  for (const { clip, momentMs } of queue) {
+    const start = timeline[cursor];
+    const hit = timeline[cursor + leadBeats];
+    const end = timeline[cursor + shotBeats];
+    if (start === undefined || hit === undefined || end === undefined || end > options.targetMs) break;
+
+    const sourceStartMs = momentMs - (hit - start);
+    const sourceEndMs = sourceStartMs + (end - start);
+    if (sourceStartMs < 0 || sourceEndMs > clip.durationMs) {
+      skipped.push({ clipId: clip.id, momentMs, reason: 'OUT_OF_CLIP' });
+      continue;
+    }
+    const ranges = used.get(clip.id) ?? [];
+    if (ranges.some(([s, e]) => sourceStartMs < e && sourceEndMs > s)) {
+      skipped.push({ clipId: clip.id, momentMs, reason: 'OVERLAP' });
+      continue;
+    }
+    ranges.push([sourceStartMs, sourceEndMs]);
+    used.set(clip.id, ranges);
+    shots.push({ clipId: clip.id, sourceStartMs, sourceEndMs, timelineStartMs: start, durationMs: end - start, hitMs: hit });
+    cursor += shotBeats;
   }
 
   if (shots.length === 0) throw new PlanError('NOT_ENOUGH_MOMENTS', 'no moment fits into its clip and the song');

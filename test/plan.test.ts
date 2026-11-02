@@ -30,6 +30,11 @@ test('every moment lands on a beat and shots are back to back', () => {
   assert.equal(plan.shots.length, 5);
 });
 
+test('takes every clip\'s best moment before any clip\'s second', () => {
+  const plan = planEdit(clips, grid(120, 60), { targetMs: 30000 });
+  assert.deepEqual(plan.shots.map(s => s.clipId), ['a', 'b', 'a', 'b', 'a']);
+});
+
 test('never exceeds the target length', () => {
   const plan = planEdit(clips, grid(120, 60), { targetMs: 5000 });
   assert.ok(plan.durationMs <= 5000);

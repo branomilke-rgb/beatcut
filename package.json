@@ -5,9 +5,14 @@
   "license": "MIT",
   "author": "Branislav Milke",
   "type": "module",
-  "bin": { "beatcut": "src/cli.ts" },
-  "engines": { "node": ">=22.18" },
+  "bin": {
+    "beatcut": "src/cli.ts"
+  },
+  "engines": {
+    "node": ">=22.18"
+  },
   "scripts": {
+    "start": "node src/server.ts",
     "test": "node --test \"test/*.test.ts\"",
     "typecheck": "tsc",
     "smoke": "node scripts/smoke.ts"
